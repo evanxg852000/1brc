@@ -9,11 +9,10 @@ const Info = struct {
     count: f64,
 };
 
-// const StringHashMap = std.StringHashMap(Info);
-const StringHashMap = std.ArrayHashMap(String, Info, StringContext, true);
+const StringHashMap = std.StringHashMap(Info);
 
-fn lessThan (_: void, lhs: *String, rhs: *String) bool {
-    return std.mem.lessThan(u8, lhs.data, rhs.data);
+fn lessThan (_: void, lhs: []const u8, rhs: []const u8) bool {
+    return std.mem.lessThan(u8, lhs, rhs);
 }
 
 pub const Aggregator = struct {
@@ -28,18 +27,12 @@ pub const Aggregator = struct {
     }
 
     pub fn deinit(self: *Aggregator) void {
-        var iter = self.groups.iterator();
-        while(iter.next()) |entry| {
-            entry.key_ptr.deinit();
-        }
         self.groups.deinit();
     }
 
-    pub fn add(self: *Aggregator, city_bytes: []const u8, val: f64) !void {
-        const city = try String.new(self.allocator, city_bytes);
+    pub fn add(self: *Aggregator, city: []const u8, val: f64) !void {
         var entry = try self.groups.getOrPut(city);
         if (entry.found_existing) {
-            (&city).deinit();
             if (entry.value_ptr.min > val) {
                 entry.value_ptr.min = val;
             }
@@ -61,53 +54,23 @@ pub const Aggregator = struct {
     }
 
     pub fn display(self: *Aggregator, allocator: Allocator) void {
-        var cities = std.ArrayList(*String).init(allocator);
+        var cities = std.ArrayList([]const u8).init(allocator);
         defer cities.deinit();
         cities.ensureTotalCapacity(self.groups.count()) catch unreachable;
-        var iter = self.groups.iterator();
-        while (iter.next()) |entry| {
-            cities.appendAssumeCapacity(entry.key_ptr);
+        var iter = self.groups.keyIterator();
+        while (iter.next()) |city| {
+            cities.appendAssumeCapacity(city.*);
         }
 
         const sorted_cities = cities.toOwnedSlice() catch unreachable;
         defer allocator.free(sorted_cities);
-        std.mem.sort(*String, sorted_cities, {}, lessThan);
+        std.mem.sort([]const u8, sorted_cities, {}, lessThan);
 
         for(sorted_cities) |city| {
-            const info = self.groups.get(city.*) orelse unreachable;
-            std.debug.print("{s}={}/{}/{}\n", .{city.data, info.min, info.mean, info.max});
+            const info = self.groups.get(city) orelse unreachable;
+            std.debug.print("{s}={}/{}/{}\n", .{city, info.min, info.mean, info.max});
         }
 
     }
 }; 
 
-
-const String = struct {
-    data: []const u8,
-    allocator: std.mem.Allocator,
-
-    pub fn new(allocator: Allocator, str: [] const u8) !String {
-        const data = try allocator.alloc(u8, str.len);
-        @memcpy(data, str);
-        return String{
-            .data = data,
-            .allocator = allocator,
-        };
-    }
-
-    pub fn deinit(self: String) void {
-        self.allocator.free(self.data);
-    }
-};
-
-const StringContext = struct {
-    pub fn hash(_: StringContext, key: String) u32 {
-        var h = std.hash.Fnv1a_32.init();
-        h.update(key.data);
-        return h.final();
-    }
-
-    pub fn eql(_: StringContext, a: String, b: String, _: usize) bool {
-        return std.mem.eql(u8, a.data, b.data);
-    }
-};
