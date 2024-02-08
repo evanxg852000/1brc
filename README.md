@@ -1,6 +1,6 @@
 # 1brc implementation
 
-This is my one billion row challenge implementation in zig.
+This is my implementation of the one billion row challenge in Zig.
 In zig with the basic implementation, it takes about `0.06` seconds. 
 
 ```bash
