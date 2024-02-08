@@ -9,8 +9,7 @@ const Info = struct {
     count: f64,
 };
 
-// const StringHashMap = std.StringHashMap(Info);
-const StringHashMap = std.ArrayHashMap(String, Info, StringContext, true);
+const StringHashMap = std.ArrayHashMap(String, Info, StringContext, false);
 
 fn lessThan (_: void, lhs: *String, rhs: *String) bool {
     return std.mem.lessThan(u8, lhs.data, rhs.data);
@@ -39,7 +38,7 @@ pub const Aggregator = struct {
         const city = try String.new(self.allocator, city_bytes);
         var entry = try self.groups.getOrPut(city);
         if (entry.found_existing) {
-            (&city).deinit();
+            city.deinit();
             if (entry.value_ptr.min > val) {
                 entry.value_ptr.min = val;
             }
@@ -55,7 +54,7 @@ pub const Aggregator = struct {
                 .max = val,
                 .sum = val,
                 .count = 1.0,
-                .mean = 1.0,
+                .mean = val,
             };
         }
     }
@@ -75,7 +74,7 @@ pub const Aggregator = struct {
 
         for(sorted_cities) |city| {
             const info = self.groups.get(city.*) orelse unreachable;
-            std.debug.print("{s}={}/{}/{}\n", .{city.data, info.min, info.mean, info.max});
+            std.debug.print("{s}={d:.2}/{d:.2}/{d:.2}\n", .{city.data, info.min, info.mean, info.max});
         }
 
     }

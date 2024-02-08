@@ -17,13 +17,12 @@ pub fn main() !void {
     var aggregator = Aggregator.init(allocator);
     defer aggregator.deinit();
     while (try in_stream.readUntilDelimiterOrEof(&buf, '\n')) |line| {
-       
         var it = std.mem.split(u8, line, ";");
 
         const city = it.next().? ;
         const value = try std.fmt.parseFloat(f64, it.next().?);
 
-        std.debug.print("{s} {d}\n", .{ city, value });
+        // std.debug.print("{s} {d}\n", .{ city, value });
         try aggregator.add(city, value);
     }
 
