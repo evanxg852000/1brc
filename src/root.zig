@@ -9,7 +9,27 @@ const Info = struct {
     count: f64,
 };
 
+const String = struct {
+    allocator: Allocator,
+    data: [] const u8,
+
+    fn init(allocator: Allocator, data: []const u8) !String {
+        const buffer = try allocator.alloc(u8, data.len);
+        @memcpy(buffer, data);
+        return String {
+            .allocator = allocator,
+            .data = buffer,
+        };
+    }
+
+    fn deinit(self: String) void {
+        self.allocator.free(self.data);
+    }
+};
+
 const StringHashMap = std.StringHashMap(Info);
+
+// const StringHashMap = std.AutoHashMap([]const u8, Info);
 
 fn lessThan (_: void, lhs: []const u8, rhs: []const u8) bool {
     return std.mem.lessThan(u8, lhs, rhs);
@@ -17,21 +37,28 @@ fn lessThan (_: void, lhs: []const u8, rhs: []const u8) bool {
 
 pub const Aggregator = struct {
     groups: StringHashMap,
+    dict: std.ArrayList(String),
     allocator: Allocator,
 
     pub fn init(allocator: Allocator) Aggregator {
         return Aggregator {
             .groups = StringHashMap.init(allocator),
+            .dict = std.ArrayList(String).init(allocator),
             .allocator = allocator,
         };
     }
 
     pub fn deinit(self: *Aggregator) void {
+        for(self.dict.items) |key| {
+            key.deinit();
+        }
+        self.dict.deinit();
         self.groups.deinit();
     }
 
     pub fn add(self: *Aggregator, city: []const u8, val: f64) !void {
-        var entry = try self.groups.getOrPut(city);
+        const owned_city = try String.init(self.allocator, city);
+        var entry = try self.groups.getOrPut(owned_city.data);
         if (entry.found_existing) {
             if (entry.value_ptr.min > val) {
                 entry.value_ptr.min = val;
@@ -42,13 +69,15 @@ pub const Aggregator = struct {
             entry.value_ptr.sum += val;
             entry.value_ptr.count += 1.0;
             entry.value_ptr.mean = entry.value_ptr.sum / entry.value_ptr.count;
+            owned_city.deinit();
         } else {
+            try self.dict.append(owned_city);
             entry.value_ptr.* = Info{
                 .min = val,
                 .max = val,
                 .sum = val,
                 .count = 1.0,
-                .mean = 1.0,
+                .mean = val,
             };
         }
     }
@@ -68,9 +97,8 @@ pub const Aggregator = struct {
 
         for(sorted_cities) |city| {
             const info = self.groups.get(city) orelse unreachable;
-            std.debug.print("{s}={}/{}/{}\n", .{city, info.min, info.mean, info.max});
+            std.debug.print("{s}={d:.2}/{d:.2}/{d:.2}\n", .{city, info.min, info.mean, info.max});
         }
 
     }
 }; 
-
